@@ -30,7 +30,7 @@ def ldaLearn(X,y):
         for j in range(np.size(X,axis=1)):
             imean=np.mean(X[:,i])
             jmean=np.mean(X[:,j])
-            covmat[i,j]=np.sum(np.multiply((X[:,i]-imean),(X[:,j]-jmean)))/(np.size(X,axis=0)-1)
+            covmat[i,j]=np.sum(np.multiply((X[:,i]-imean),(X[:,j]-jmean)))/(np.size(X,axis=0))
 
     return means,covmat
 
@@ -43,7 +43,26 @@ def qdaLearn(X,y):
     # means - A d x k matrix containing learnt means for each of the k classes
     # covmats - A list of k d x d learnt covariance matrices for each of the k classes
     
-    # IMPLEMENT THIS METHOD
+    classif=np.unique(np.array(y))
+    fullmat=np.concatenate((X,y),axis=1)
+    means=np.zeros((np.size(X,axis=1),np.size(classif)))
+    covmats=list()
+
+    for k in range(np.size(classif)):
+        for d in range(np.size(X,axis=1)):
+            means[d,k]=np.mean(fullmat[np.where(np.array(y)==classif[k])[0],d])
+                    
+        classmat=fullmat[np.where(np.array(y)==classif[k])[0],:-1]
+
+        covmatd=np.zeros((np.size(classmat,axis=1),np.size(classmat,axis=1)))
+        for i in range(np.size(classmat,axis=1)):
+            for j in range(np.size(classmat,axis=1)):
+                imean=np.mean(classmat[:,i])
+                jmean=np.mean(classmat[:,j])
+                covmatd[i,j]=np.sum(np.multiply((classmat[:,i]-imean),(classmat[:,j]-jmean)))/(np.size(classmat,axis=0))
+        
+        covmats.append(covmatd)
+        
     return means,covmats
 
 def ldaTest(means,covmat,Xtest,ytest):
@@ -55,7 +74,17 @@ def ldaTest(means,covmat,Xtest,ytest):
     # acc - A scalar accuracy value
     # ypred - N x 1 column vector indicating the predicted labels
 
-    # IMPLEMENT THIS METHOD
+    cprior=1/np.size(means,axis=1)
+    
+    probc=np.zeros((np.size(Xtest,axis=0),np.size(means,axis=1)))
+    for c in range(np.size(means,axis=1)):
+        gc=np.matmul(np.matmul(means[:,[c]].T,inv(covmat)),means[:,[c]])+np.log(cprior)
+        betac=np.matmul(inv(covmat),means[:,[c]])
+        probc[:,[c]]=(betac.T*Xtest.T+gc).T
+        
+    
+    ypred=(np.argmax(probc,axis=1)).reshape(np.size(probc,axis=0),1)
+    acc=np.count_nonzero(ytest.T==ypred)/np.size(ytest,axis=0)
     return acc,ypred
 
 def qdaTest(means,covmats,Xtest,ytest):
