@@ -83,9 +83,8 @@ def ldaTest(means,covmat,Xtest,ytest):
         probc[:,[c]]=(betac.T*Xtest.T+gc).T
         
     
-    ypred=(np.argmax(probc,axis=1)).reshape(np.size(probc,axis=0),1)
-    acc=np.count_nonzero(ytest.T==ypred)/np.size(ytest,axis=0)
-    return acc,ypred
+    ypred=np.argmax(probc,axis=1)
+    acc=np.mean(ypred==ytest.T)
 
 def qdaTest(means,covmats,Xtest,ytest):
     # Inputs
@@ -96,7 +95,17 @@ def qdaTest(means,covmats,Xtest,ytest):
     # acc - A scalar accuracy value
     # ypred - N x 1 column vector indicating the predicted labels
 
-    # IMPLEMENT THIS METHOD
+    cprior=1/np.size(means,axis=1)
+    
+    probc=np.zeros((np.size(Xtest,axis=0),np.size(means,axis=1)))
+    for c in range(np.size(means,axis=1)):
+        gc=np.matmul(np.matmul(means[:,[c]].T,inv(covmats[c])),means[:,[c]])+np.log(cprior)
+        betac=np.matmul(inv(covmats[c]),means[:,[c]])
+        probc[:,[c]]=(betac.T*Xtest.T+gc).T
+        
+    ypred=np.argmax(probc,axis=1)
+    acc=np.mean(ypred==ytest.T)
+    
     return acc,ypred
 
 def learnOLERegression(X,y):
