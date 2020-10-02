@@ -105,7 +105,7 @@ def qdaTest(means,covmats,Xtest,ytest):
         
     ypred=np.argmax(probc,axis=1)
     acc=np.mean(ypred==ytest.T)
-    
+
     return acc,ypred
 
 def learnOLERegression(X,y):
@@ -115,7 +115,7 @@ def learnOLERegression(X,y):
     # Output: 
     # w = d x 1 
 	
-    # IMPLEMENT THIS METHOD                                                   
+    w=np.matmul(np.matmul(inv(np.matmul(X.T,X)),X.T),y)
     return w
 
 def learnRidgeRegression(X,y,lambd):
@@ -137,7 +137,8 @@ def testOLERegression(w,Xtest,ytest):
     # Output:
     # mse
     
-    # IMPLEMENT THIS METHOD
+    ypred=np.dot(Xtest,w)
+    mse=np.mean(np.power((ytest-ypred),2))
     return mse
 
 def regressionObjVal(w, X, y, lambd):
