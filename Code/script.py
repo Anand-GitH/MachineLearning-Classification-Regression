@@ -126,7 +126,15 @@ def learnRidgeRegression(X,y,lambd):
     # Output:                                                                  
     # w = d x 1                                                                
 
-    # IMPLEMENT THIS METHOD                                                   
+    for d in range(np.size(X,axis=1)):
+        X[:,d]=X[:,d]-np.mean(X[:,d])
+    
+    y[:,0]=y[:,0]-np.mean(y[:,0])
+        
+    I=np.identity(np.size(X,axis=1))
+                                            
+    w=np.matmul(np.matmul(inv(np.matmul(X.T,X)+lambd*I),X.T),y)
+
     return w
 
 def testOLERegression(w,Xtest,ytest):
@@ -160,6 +168,21 @@ def mapNonLinear(x,p):
     # IMPLEMENT THIS METHOD
     return Xp
 
+
+def testRidgeRegression(X,y,Xtest,ytest):
+    
+    w0=np.mean(y[:,0]-np.mean(y[:,0]))
+    ridgeresults=np.empty((1,4))
+    for lambd in np.arange(0,1,0.01):
+        w=learnRidgeRegression(X,y,lambd)
+        w=np.vstack((w0,w))
+        MSEtrain=testOLERegression(w,np.hstack((np.ones((np.size(X,axis=0),1)),X)),y)
+        MSEtest=testOLERegression(w,np.hstack((np.ones((np.size(Xtest,axis=0),1)),Xtest)),ytest)
+        ridgeresults=np.vstack((ridgeresults,np.array([[lambd,w,MSEtrain,MSEtest]])))
+        
+        
+    return ridgeresults 
+    
 # Main script
 
 # Problem 1
