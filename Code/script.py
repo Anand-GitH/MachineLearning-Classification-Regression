@@ -154,8 +154,10 @@ def regressionObjVal(w, X, y, lambd):
     # compute squared error (scalar) and gradient of squared error with respect
     # to w (vector) for the given data X and y and the regularization parameter
     # lambda                                                                  
+    
+    error = (1/2)*((y- X @ w).T @ (y- X @ w))+(1/2)*lambd*(np.sum(np.square(w)))
+    error_grad= (1/2)*(X.T @ (y- X @ w))+ (1/2)*lambd*w
 
-    # IMPLEMENT THIS METHOD                                             
     return error, error_grad
 
 def mapNonLinear(x,p):
@@ -164,8 +166,11 @@ def mapNonLinear(x,p):
     # p - integer (>= 0)                                                       
     # Outputs:                                                                 
     # Xp - (N x (p+1)) 
-	
-    # IMPLEMENT THIS METHOD
+    Xp=np.ones((np.size(x,axis=0),1))
+
+    for i in range(1,p+1):
+        Xp=np.hstack((Xp,np.power(x,i)))
+        
     return Xp
 
 
