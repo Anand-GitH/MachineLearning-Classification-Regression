@@ -17,7 +17,7 @@ def ldaLearn(X,y):
     # means - A d x k matrix containing learnt means for each of the k classes
     # covmat - A single d x d learnt covariance matrix 
     
-    classif=np.unique(np.array(y))
+    classif=np.unique(y)
     fullmat=np.concatenate((X,y),axis=1)
     means=np.zeros((np.size(X,axis=1),np.size(classif)))
     covmat=np.zeros((np.size(X,axis=1),np.size(X,axis=1)))
@@ -78,13 +78,15 @@ def ldaTest(means,covmat,Xtest,ytest):
     
     probc=np.zeros((np.size(Xtest,axis=0),np.size(means,axis=1)))
     for c in range(np.size(means,axis=1)):
-        gc=np.matmul(np.matmul(means[:,[c]].T,inv(covmat)),means[:,[c]])+np.log(cprior)
+        gc=-1/2*(np.matmul(np.matmul(means[:,[c]].T,inv(covmat)),means[:,[c]]))+np.log(cprior)
         betac=np.matmul(inv(covmat),means[:,[c]])
-        probc[:,[c]]=(betac.T*Xtest.T+gc).T
+        probc[:,[c]]=(betac.T @ Xtest.T+gc).T
         
-    
     ypred=np.argmax(probc,axis=1)
+    ypred=ypred+1  #as index starts here from 0 for true label so augmenting by 1
     acc=np.mean(ypred==ytest.T)
+        
+    return acc,ypred
 
 def qdaTest(means,covmats,Xtest,ytest):
     # Inputs
@@ -98,12 +100,18 @@ def qdaTest(means,covmats,Xtest,ytest):
     cprior=1/np.size(means,axis=1)
     
     probc=np.zeros((np.size(Xtest,axis=0),np.size(means,axis=1)))
-    for c in range(np.size(means,axis=1)):
-        gc=np.matmul(np.matmul(means[:,[c]].T,inv(covmats[c])),means[:,[c]])+np.log(cprior)
-        betac=np.matmul(inv(covmats[c]),means[:,[c]])
-        probc[:,[c]]=(betac.T*Xtest.T+gc).T
+    
+    for irow in range(Xtest.shape[0]):
+        Xrow=Xtest[irow,:]
+        Xrow=Xrow.reshape(Xrow.shape[0],1)
+        for c in range(np.size(means,axis=1)):
+            logcov=-1/2 * np.log(det((covmats[c])))
+            centX=Xrow-means[:,[c]]
+            invcov=inv(covmats[c])
+            probc[irow,[c]]=(logcov- 1/2*(centX.T @ invcov @ centX)+np.log(cprior))
         
     ypred=np.argmax(probc,axis=1)
+    ypred=ypred+1  #as index starts here from 0 for true label so augmenting by 1
     acc=np.mean(ypred==ytest.T)
 
     return acc,ypred
@@ -114,8 +122,7 @@ def learnOLERegression(X,y):
     # y = N x 1                                                               
     # Output: 
     # w = d x 1 
-	
-    w=np.matmul(np.matmul(inv(np.matmul(X.T,X)),X.T),y)
+    w=inv(X.T @ X) @ X.T @ y
     return w
 
 def learnRidgeRegression(X,y,lambd):
@@ -125,15 +132,10 @@ def learnRidgeRegression(X,y,lambd):
     # lambd = ridge parameter (scalar)
     # Output:                                                                  
     # w = d x 1                                                                
-
-    for d in range(np.size(X,axis=1)):
-        X[:,d]=X[:,d]-np.mean(X[:,d])
-    
-    y[:,0]=y[:,0]-np.mean(y[:,0])
         
     I=np.identity(np.size(X,axis=1))
                                             
-    w=np.matmul(np.matmul(inv(np.matmul(X.T,X)+lambd*I),X.T),y)
+    w=inv(X.T @ X + lambd*I) @ X.T @ y
 
     return w
 
@@ -145,7 +147,7 @@ def testOLERegression(w,Xtest,ytest):
     # Output:
     # mse
     
-    ypred=np.dot(Xtest,w)
+    ypred=Xtest @ w
     mse=np.mean(np.power((ytest-ypred),2))
     return mse
 
@@ -153,12 +155,19 @@ def regressionObjVal(w, X, y, lambd):
 
     # compute squared error (scalar) and gradient of squared error with respect
     # to w (vector) for the given data X and y and the regularization parameter
-    # lambda                                                                  
+    # lambda
     
-    error = (1/2)*((y- X @ w).T @ (y- X @ w))+(1/2)*lambd*(np.sum(np.square(w)))
-    error_grad= (1/2)*(X.T @ (y- X @ w))+ (1/2)*lambd*w
-
-    return error, error_grad
+    #Reshaping as per the Xw and Y column vector to find error
+    w=w.T
+    w=w.reshape(len(w),1)
+    y=y.reshape(y.shape[0],1)
+    
+    Xw=X @ w
+        
+    error = (1/2)*((Xw-y).T @ (Xw-y))+(1/2)*lambd*np.dot(w.T, w)
+    error_grad= X.T @ Xw - X.T @ y+lambd*w
+    
+    return error, error_grad.flatten()
 
 def mapNonLinear(x,p):
     # Inputs:                                                                  
@@ -166,27 +175,13 @@ def mapNonLinear(x,p):
     # p - integer (>= 0)                                                       
     # Outputs:                                                                 
     # Xp - (N x (p+1)) 
+    
     Xp=np.ones((np.size(x,axis=0),1))
-
+    
     for i in range(1,p+1):
-        Xp=np.hstack((Xp,np.power(x,i)))
+        Xp=np.hstack((Xp,np.power(x,i).reshape((x.shape[0],1))))
         
     return Xp
-
-
-def testRidgeRegression(X,y,Xtest,ytest):
-    
-    w0=np.mean(y[:,0]-np.mean(y[:,0]))
-    ridgeresults=np.empty((1,4))
-    for lambd in np.arange(0,1,0.01):
-        w=learnRidgeRegression(X,y,lambd)
-        w=np.vstack((w0,w))
-        MSEtrain=testOLERegression(w,np.hstack((np.ones((np.size(X,axis=0),1)),X)),y)
-        MSEtest=testOLERegression(w,np.hstack((np.ones((np.size(Xtest,axis=0),1)),Xtest)),ytest)
-        ridgeresults=np.vstack((ridgeresults,np.array([[lambd,w,MSEtrain,MSEtest]])))
-        
-        
-    return ridgeresults 
     
 # Main script
 
@@ -230,6 +225,7 @@ plt.scatter(Xtest[:,0],Xtest[:,1],c=ytest.ravel())
 plt.title('QDA')
 
 plt.show()
+
 # Problem 2
 if sys.version_info.major == 2:
     X,y,Xtest,ytest = pickle.load(open('diabetes.pickle','rb'))
@@ -241,13 +237,22 @@ X_i = np.concatenate((np.ones((X.shape[0],1)), X), axis=1)
 Xtest_i = np.concatenate((np.ones((Xtest.shape[0],1)), Xtest), axis=1)
 
 w = learnOLERegression(X,y)
-mle = testOLERegression(w,Xtest,ytest)
+mle= testOLERegression(w,X,y)
+mlet = testOLERegression(w,Xtest,ytest)
 
 w_i = learnOLERegression(X_i,y)
-mle_i = testOLERegression(w_i,Xtest_i,ytest)
+mle_i= testOLERegression(w_i,X_i,y)
+mle_it = testOLERegression(w_i,Xtest_i,ytest)
 
-print('MSE without intercept '+str(mle))
-print('MSE with intercept '+str(mle_i))
+print('-------------------------------------------------------------------')
+
+print('MSE without intercept train data  :'+str(mle))
+print('MSE with intercept train data     :'+str(mle_i))
+
+print('MSE without intercept test data   :'+str(mlet))
+print('MSE with intercept test data      :'+str(mle_it))
+
+print('-------------------------------------------------------------------')
 
 # Problem 3
 k = 101
@@ -255,11 +260,21 @@ lambdas = np.linspace(0, 1, num=k)
 i = 0
 mses3_train = np.zeros((k,1))
 mses3 = np.zeros((k,1))
+ridgeeach = np.empty((0,4), object)
+
 for lambd in lambdas:
     w_l = learnRidgeRegression(X_i,y,lambd)
     mses3_train[i] = testOLERegression(w_l,X_i,y)
     mses3[i] = testOLERegression(w_l,Xtest_i,ytest)
+    ridgeeach=np.append(ridgeeach,np.array([[lambd,w_l,mses3_train[i],mses3[i]]]), axis=0)
     i = i + 1
+            
+print('--------------Lambda for which the MSE is minimum for the test data------------------')
+print('1. Lambda value   2. Weight for the lambda   3.Training data MSE   4.Test Data MSE')
+print('-------------------------------------------------------------------------------------') 
+print(ridgeeach[np.where(ridgeeach[:,3]<=min(ridgeeach[:,3])),:])
+print('-------------------------------------------------------------------------------------')            
+    
 fig = plt.figure(figsize=[12,6])
 plt.subplot(1, 2, 1)
 plt.plot(lambdas,mses3_train)
@@ -269,6 +284,7 @@ plt.plot(lambdas,mses3)
 plt.title('MSE for Test Data')
 
 plt.show()
+
 # Problem 4
 k = 101
 lambdas = np.linspace(0, 1, num=k)
@@ -277,14 +293,25 @@ mses4_train = np.zeros((k,1))
 mses4 = np.zeros((k,1))
 opts = {'maxiter' : 20}    # Preferred value.                                                
 w_init = np.ones((X_i.shape[1],1))
+gradientridgeeach = np.empty((0,4), object)
+
 for lambd in lambdas:
-    args = (X_i, y, lambd)
+    args = (X_i, y.flatten(), lambd)
     w_l = minimize(regressionObjVal, w_init, jac=True, args=args,method='CG', options=opts)
     w_l = np.transpose(np.array(w_l.x))
     w_l = np.reshape(w_l,[len(w_l),1])
     mses4_train[i] = testOLERegression(w_l,X_i,y)
     mses4[i] = testOLERegression(w_l,Xtest_i,ytest)
+    gradientridgeeach=np.append(gradientridgeeach,np.array([[lambd,w_l,mses4_train[i],mses4[i]]]), axis=0)
     i = i + 1
+
+    
+print('--------Gradient Descent Lambda for which the MSE is minimum for the test data-------')
+print('1. Lambda value   2. Weight for the lambda   3.Training data MSE   4.Test Data MSE')
+print('-------------------------------------------------------------------------------------') 
+print(gradientridgeeach[np.where(gradientridgeeach[:,3]<=min(gradientridgeeach[:,3])),:])
+print('-------------------------------------------------------------------------------------')  
+
 fig = plt.figure(figsize=[12,6])
 plt.subplot(1, 2, 1)
 plt.plot(lambdas,mses4_train)
@@ -299,12 +326,13 @@ plt.title('MSE for Test Data')
 plt.legend(['Using scipy.minimize','Direct minimization'])
 plt.show()
 
-
 # Problem 5
 pmax = 7
-lambda_opt = 0 # REPLACE THIS WITH lambda_opt estimated from Problem 3
+lambda_opt = 0.06 # REPLACE THIS WITH lambda_opt estimated from Problem 3
 mses5_train = np.zeros((pmax,2))
 mses5 = np.zeros((pmax,2))
+nonlinridgeeach = np.empty((0,4), object)
+
 for p in range(pmax):
     Xd = mapNonLinear(X[:,2],p)
     Xdtest = mapNonLinear(Xtest[:,2],p)
@@ -314,7 +342,16 @@ for p in range(pmax):
     w_d2 = learnRidgeRegression(Xd,y,lambda_opt)
     mses5_train[p,1] = testOLERegression(w_d2,Xd,y)
     mses5[p,1] = testOLERegression(w_d2,Xdtest,ytest)
+    nonlinridgeeach=np.append(nonlinridgeeach,np.array([[p,w_d2,mses5_train[p,1],mses5[p,1]]]), axis=0)
 
+print('--------Non-Linear with optimal Lambda for which the MSE is minimum for the test data-------')
+print('1. P value   2. Weight for the lambda   3.Training data MSE   4.Test Data MSE')
+print('-------------------------------------------------------------------------------------') 
+print(nonlinridgeeach[np.where(nonlinridgeeach[:,3]<=min(nonlinridgeeach[:,3])),:])
+print('-------------------------------------------------------------------------------------') 
+
+
+    
 fig = plt.figure(figsize=[12,6])
 plt.subplot(1, 2, 1)
 plt.plot(range(pmax),mses5_train)
